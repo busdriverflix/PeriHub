@@ -104,6 +104,15 @@ public sealed class IpcServer(DeviceManager devices, UpdateChecker updates, Sett
                 settings.UpdateMouse(_ => new(mode, top, mid, bot));
                 return new(true);
             }
+            case "keyboard.get":
+                return new(true, Data: settings.Keyboard);
+            case "keyboard.lights":
+            {
+                var mode = a["mode"]; a.TryGetValue("color", out var color);
+                await devices.Keyboard.SetLightsAsync(mode, color, ct);
+                settings.UpdateKeyboard(_ => new(mode, color));
+                return new(true);
+            }
             case "settings.get":
                 return new(true, Data: settings.Headset);
             case "audio.get":

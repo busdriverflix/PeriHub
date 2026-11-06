@@ -6,11 +6,12 @@ public sealed class DeviceManager
 {
     public HeadsetDevice Headset { get; } = new();
     public MouseDevice Mouse { get; } = new();
+    public KeyboardDevice Keyboard { get; } = new();
     private readonly List<IDevice> _devices;
     public Snapshot Current { get; private set; } = new([], DateTimeOffset.MinValue);
     public event Action<Snapshot>? Updated;
 
-    public DeviceManager() => _devices = [Headset, new DualSenseDevice(), Mouse];
+    public DeviceManager() => _devices = [Headset, new DualSenseDevice(), Mouse, Keyboard];
 
     public async Task RefreshAsync(CancellationToken ct)
     {

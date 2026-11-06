@@ -26,6 +26,7 @@ AppDomain.CurrentDomain.ProcessExit += (_, _) => cts.Cancel();
 devices.Updated += notifier.OnUpdate;
 devices.Updated += restorer.OnUpdate;
 devices.Updated += new MouseRestorer(devices.Mouse, settings).OnUpdate;
+devices.Updated += new KeyboardRestorer(devices.Keyboard, settings).OnUpdate;
 
 using var tray = new StatusNotifierTray { OnActivate = StatusNotifierTray.LaunchGui };
 if (!args.Contains("--no-tray"))

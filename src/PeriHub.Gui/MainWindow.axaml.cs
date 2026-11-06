@@ -27,6 +27,8 @@ public partial class MainWindow : Window
     private bool _presetsFilled;
     private bool _settingsLoaded;
     private bool _mouseLoaded;
+    private bool _kbLoaded;
+    private DateTime _kbIgnoreUntil = DateTime.MaxValue;
     private DateTime _mouseIgnoreUntil = DateTime.MaxValue; // controls report 'changed' on their own while they are set up; those are not user input
     private readonly Dictionary<string, double[]> _presetBands = new();
     private bool _compact;
@@ -85,6 +87,11 @@ public partial class MainWindow : Window
         MouseModeBox.SelectedIndex = 0;
         MouseModeBox.SelectionChanged += (_, _) => { UpdateMouseColorsEnabled(); Debounced("mouse", SendMouseLights, 400); };
         foreach (var cp in new[] { TopColor, MiddleColor, BottomColor }) cp.ColorChanged += (_, _) => Debounced("mouse", SendMouseLights, 700);
+        foreach (var (label, mode) in new[] { ("Eine Farbe", "static"), ("Regenbogen-Welle", "rainbow"), ("Aus", "off"), ("Standard", "default") })
+            KeyboardModeBox.Items.Add(new ComboBoxItem { Content = label, Tag = mode });
+        KeyboardModeBox.SelectedIndex = 0;
+        KeyboardModeBox.SelectionChanged += (_, _) => { UpdateKeyboardColorEnabled(); Debounced("kb", SendKeyboardLights, 400); };
+        KeyboardColor.ColorChanged += (_, _) => Debounced("kb", SendKeyboardLights, 700);
         ResetEqButton.Click += (_, _) =>
         {
             _loading = true; // set the controls without sending one command per slider
@@ -136,7 +143,7 @@ public partial class MainWindow : Window
             HorizontalContentAlignment = HorizontalAlignment.Left,
             Content = new StackPanel { Children = { row, t.Pct } },
         });
-        t.Sub.Text = t.Id is "keyboard" ? "Noch keine Steuerung" : "…";
+        t.Sub.Text = "…";
     }
 
     private void ShowSelectedPane()
@@ -209,6 +216,16 @@ public partial class MainWindow : Window
     private void UpdateMouseColorsEnabled() =>
         MouseColors.IsEnabled = MouseModeBox.SelectedItem is ComboBoxItem { Tag: "static" };
 
+    private void UpdateKeyboardColorEnabled() =>
+        KeyboardColors.IsEnabled = KeyboardModeBox.SelectedItem is ComboBoxItem { Tag: "static" };
+
+    private void SendKeyboardLights()
+    {
+        if (!_kbLoaded || DateTime.UtcNow < _kbIgnoreUntil) return; // never push lighting just because the window opened
+        if (KeyboardModeBox.SelectedItem is not ComboBoxItem { Tag: string mode }) return;
+        Send("keyboard.lights", ("mode", mode), ("color", Hex(KeyboardColor.Color)));
+    }
+
     private static string Hex(Color c) => $"{c.R:x2}{c.G:x2}{c.B:x2}";
 
     private void SendMouseLights()
@@ -249,6 +266,25 @@ public partial class MainWindow : Window
             _settingsLoaded = true;
         }
         catch (Exception ex) { ConnectionBanner.Text = $"Einstellungen laden: {ex.Message}"; ConnectionBanner.IsVisible = true; }
+    }
+
+    private async Task LoadSavedKeyboardAsync()
+    {
+        try
+        {
+            var k = (await _core.CallAsync("keyboard.get")).GetProperty("data");
+            if (k.GetProperty("mode").ValueKind == JsonValueKind.String)
+            {
+                var mode = k.GetProperty("mode").GetString();
+                KeyboardModeBox.SelectedItem = KeyboardModeBox.Items.OfType<ComboBoxItem>().FirstOrDefault(i => (string?)i.Tag == mode);
+                if (k.GetProperty("color").GetString() is { Length: 6 } hex && Color.TryParse("#" + hex, out var col)) KeyboardColor.Color = col;
+            }
+            UpdateKeyboardColorEnabled();
+            _kbIgnoreUntil = DateTime.UtcNow.AddSeconds(2); // late change events from the color picker land in this window
+            if (_debounce.TryGetValue("kb", out var pending)) pending.Stop();
+            _kbLoaded = true;
+        }
+        catch (Exception ex) { ConnectionBanner.Text = $"Tastatur-Einstellungen laden: {ex.Message}"; ConnectionBanner.IsVisible = true; }
     }
 
     private async Task LoadSavedMouseAsync()
@@ -304,7 +340,7 @@ public partial class MainWindow : Window
                 var connected = d.GetProperty("connected").GetBoolean();
                 var battery = d.GetProperty("battery").ValueKind == JsonValueKind.Number ? d.GetProperty("battery").GetInt32() : (int?)null;
                 var stateText = d.GetProperty("batteryState").GetString();
-                var text = connected ? $"{stateText} · {(battery is { } b ? b + " %" : "Akku unbekannt")}" : stateText;
+                var text = connected ? (battery is { } b ? $"{stateText} · {b} %" : stateText) : stateText;
                 tile.Sub.Text = text;
                 tile.Pct.Text = connected && battery is { } p ? $"{p} %" : "–";
 
@@ -324,6 +360,9 @@ public partial class MainWindow : Window
                             _presetsFilled = true;
                         }
                         break;
+                    case "keyboard":
+                        KeyboardStatus.Text = stateText;
+                        break;
                     case "mouse":
                         MouseStatus.Text = text; MouseBattery.Value = battery ?? 0;
                         break;
@@ -336,6 +375,7 @@ public partial class MainWindow : Window
             }
             if (!_settingsLoaded && _presetsFilled) await LoadSavedSettingsAsync();
             if (!_mouseLoaded) await LoadSavedMouseAsync();
+            if (!_kbLoaded) await LoadSavedKeyboardAsync();
             if (surroundRunning is { } sr && SurroundToggle.IsEnabled) SurroundToggle.IsChecked = sr;
             if (volume is { } v && !_volBusy && !VolumeSlider.IsPointerOver)
             {

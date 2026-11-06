@@ -104,7 +104,16 @@
                 Stretch="Uniform" Width="300" Height="300" Opacity="0.07" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,24,64" IsHitTestVisible="False"/>
           <StackPanel Grid.Row="0" Margin="20,12,20,12" Spacing="12">
             <TextBlock Text="ROCCAT Vulcan II" FontSize="22" FontWeight="SemiBold"/>
-            <TextBlock Opacity="0.7" TextWrapping="Wrap" Text="Noch keine Steuerung. Geplant: Beleuchtung."/>
+            <TextBlock x:Name="KeyboardStatus" Opacity="0.7"/>
+
+            <TextBlock Text="Beleuchtung" FontWeight="SemiBold" Margin="0,10,0,0"/>
+            <ComboBox x:Name="KeyboardModeBox" Width="260" HorizontalAlignment="Left"/>
+            <StackPanel x:Name="KeyboardColors" Spacing="4" Margin="0,6,0,0">
+              <TextBlock Text="Farbe" FontSize="12"/>
+              <ColorPicker x:Name="KeyboardColor" Color="#FF8800" HorizontalAlignment="Left"/>
+            </StackPanel>
+            <TextBlock FontSize="11" Opacity="0.6" TextWrapping="Wrap"
+                       Text="Gesteuert über OpenRGB, das nur die Tastatur anspricht. &quot;Standard&quot; gibt die Beleuchtung an die Tastatur zurück. Farbe pro Taste ist technisch möglich, kommt aber später."/>
           </StackPanel>
           <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="12" Margin="20,8,20,16">
             <TextBlock x:Name="KeyboardUpdateResult" VerticalAlignment="Center" FontSize="12" Opacity="0.8" MaxWidth="360" TextWrapping="Wrap"/>
