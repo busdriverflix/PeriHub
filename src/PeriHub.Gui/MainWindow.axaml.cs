@@ -25,6 +25,8 @@ public partial class MainWindow : Window
     private readonly Dictionary<string, DispatcherTimer> _debounce = new();
     private bool _loading;          // true while we set controls from code, so no command is sent back
     private bool _presetsFilled;
+    private bool _settingsLoaded;
+    private readonly Dictionary<string, double[]> _presetBands = new();
     private bool _compact;
     private double _expandedWidth = 940;
 
@@ -58,8 +60,11 @@ public partial class MainWindow : Window
         foreach (var b in _bands) b.ValueChanged += (_, _) => Debounced("eq", SendEqualizer);
         PresetBox.SelectionChanged += (_, _) =>
         {
-            if (_loading || PresetBox.SelectedIndex < 0) return;
-            Send("headset.preset", ("index", PresetBox.SelectedIndex.ToString()));
+            if (_loading || PresetBox.SelectedItem is not string name || !_presetBands.TryGetValue(name, out var values)) return;
+            _loading = true;
+            for (int i = 0; i < _bands.Length && i < values.Length; i++) _bands[i].Value = values[i];
+            _loading = false;
+            SendEqualizer();
         };
         InactiveBox.SelectionChanged += (_, _) =>
         {
@@ -181,6 +186,30 @@ public partial class MainWindow : Window
         catch (Exception ex) { ConnectionBanner.Text = $"Befehl fehlgeschlagen: {ex.Message}"; ConnectionBanner.IsVisible = true; }
     }
 
+    // ---------- saved settings ----------
+
+    /// <summary>Shows what the core has saved (and re-applies on connect) so the controls start with the real values. Runs inside RefreshAsync, i.e. with _loading set.</summary>
+    private async Task LoadSavedSettingsAsync()
+    {
+        try
+        {
+            var h = (await _core.CallAsync("settings.get")).GetProperty("data");
+            if (h.TryGetProperty("eq", out var eq) && eq.ValueKind == JsonValueKind.Array)
+            {
+                var values = eq.EnumerateArray().Select(v => v.GetDouble()).ToArray();
+                for (int i = 0; i < _bands.Length && i < values.Length; i++) _bands[i].Value = values[i];
+                var match = _presetBands.FirstOrDefault(p => p.Value.SequenceEqual(values)).Key;
+                PresetBox.SelectedItem = match; // null when it is a custom curve
+            }
+            if (h.TryGetProperty("sidetone", out var st) && st.ValueKind == JsonValueKind.Number)
+            { SidetoneSlider.Value = st.GetInt32(); SidetoneLabel.Text = st.GetInt32().ToString(); }
+            if (h.TryGetProperty("inactiveMinutes", out var im) && im.ValueKind == JsonValueKind.Number)
+                InactiveBox.SelectedItem = InactiveBox.Items.OfType<ComboBoxItem>().FirstOrDefault(i => i.Tag is int m && m == im.GetInt32());
+            _settingsLoaded = true;
+        }
+        catch (Exception ex) { ConnectionBanner.Text = $"Einstellungen laden: {ex.Message}"; ConnectionBanner.IsVisible = true; }
+    }
+
     // ---------- polling ----------
 
     private async Task RefreshAsync()
@@ -223,6 +252,12 @@ public partial class MainWindow : Window
                         if (!_presetsFilled && d.GetProperty("info").TryGetProperty("presets", out var presets))
                         {
                             foreach (var name in presets.GetString()!.Split(',')) PresetBox.Items.Add(name);
+                            if (d.GetProperty("info").TryGetProperty("presetBands", out var pb))
+                                foreach (var entry in pb.GetString()!.Split('|'))
+                                {
+                                    var parts = entry.Split(':');
+                                    _presetBands[parts[0]] = parts[1].Split(',').Select(v => double.Parse(v, CultureInfo.InvariantCulture)).ToArray();
+                                }
                             _presetsFilled = true;
                         }
                         break;
@@ -233,6 +268,7 @@ public partial class MainWindow : Window
                         break;
                 }
             }
+            if (!_settingsLoaded && _presetsFilled) await LoadSavedSettingsAsync();
             if (volume is { } v && !_volBusy && !VolumeSlider.IsPointerOver)
             {
                 VolumeSlider.Value = v; VolumeLabel.Text = $"{v} %";

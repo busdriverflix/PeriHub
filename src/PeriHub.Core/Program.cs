@@ -7,6 +7,8 @@ using PeriHub.Core.Tray;
 var devices = new DeviceManager();
 var notifier = new BatteryNotifier();
 var updates = new UpdateChecker();
+var settings = new SettingsStore();
+var restorer = new HeadsetRestorer(devices.Headset, settings);
 
 if (args.Contains("--once")) // debugging: print one status snapshot and exit
 {
@@ -20,6 +22,7 @@ Console.CancelKeyPress += (_, e) => { e.Cancel = true; cts.Cancel(); };
 AppDomain.CurrentDomain.ProcessExit += (_, _) => cts.Cancel();
 
 devices.Updated += notifier.OnUpdate;
+devices.Updated += restorer.OnUpdate;
 
 using var tray = new StatusNotifierTray { OnActivate = StatusNotifierTray.LaunchGui };
 if (!args.Contains("--no-tray"))
@@ -42,7 +45,7 @@ Console.WriteLine($"PeriHub core running, socket: {IpcServer.SocketPath}");
 _ = StartupUpdateCheckAsync(updates, cts.Token);
 await Task.WhenAll(
     devices.RunAsync(TimeSpan.FromSeconds(30), cts.Token),
-    new IpcServer(devices, updates).RunAsync(cts.Token));
+    new IpcServer(devices, updates, settings).RunAsync(cts.Token));
 
 /// <summary>Shortly after start, ask fwupd about our peripherals and notify only if something is actually available.</summary>
 static async Task StartupUpdateCheckAsync(UpdateChecker updates, CancellationToken ct)

@@ -27,7 +27,12 @@ public sealed class HeadsetDevice : IDevice
             int? level = bat.TryGetProperty("level", out var l) && l.TryGetInt32(out var lv) && lv >= 0 ? lv : null;
             var connected = state is "BATTERY_AVAILABLE" or "BATTERY_CHARGING";
             if (dev.TryGetProperty("equalizer_presets", out var presets))
+            {
                 info["presets"] = string.Join(",", presets.EnumerateObject().Select(p => p.Name));
+                // "name:v1,v2,..|name2:..." so the GUI can show a preset's values on the sliders
+                info["presetBands"] = string.Join("|", presets.EnumerateObject().Select(p =>
+                    p.Name + ":" + string.Join(",", p.Value.EnumerateArray().Select(v => v.GetDouble().ToString(CultureInfo.InvariantCulture)))));
+            }
             return new DeviceStatus(Id, name, connected, connected ? level : null, state switch
             {
                 "BATTERY_CHARGING" => "Lädt",

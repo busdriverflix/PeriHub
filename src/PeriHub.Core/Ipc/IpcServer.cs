@@ -5,7 +5,7 @@ using PeriHub.Core.Services;
 namespace PeriHub.Core.Ipc;
 
 /// <summary>JSON-lines protocol over a Unix socket in $XDG_RUNTIME_DIR. One request line -> one response line.</summary>
-public sealed class IpcServer(DeviceManager devices, UpdateChecker updates)
+public sealed class IpcServer(DeviceManager devices, UpdateChecker updates, SettingsStore settings)
 {
     public static string SocketPath => Path.Combine(
         Environment.GetEnvironmentVariable("XDG_RUNTIME_DIR") ?? Path.GetTempPath(), "perihub.sock");
@@ -65,14 +65,28 @@ public sealed class IpcServer(DeviceManager devices, UpdateChecker updates)
                 await devices.Headset.SetPresetAsync(int.Parse(a["index"]), ct);
                 return new(true);
             case "headset.eq":
-                await devices.Headset.SetEqualizerAsync(a["bands"].Split(',').Select(s => double.Parse(s, System.Globalization.CultureInfo.InvariantCulture)).ToList(), ct);
+            {
+                var bands = a["bands"].Split(',').Select(s => double.Parse(s, System.Globalization.CultureInfo.InvariantCulture)).ToArray();
+                await devices.Headset.SetEqualizerAsync(bands, ct);
+                settings.UpdateHeadset(h => h with { Eq = bands }); // only saved once the headset accepted it
                 return new(true);
+            }
             case "headset.sidetone":
-                await devices.Headset.SetSidetoneAsync(int.Parse(a["level"]), ct);
+            {
+                var level = int.Parse(a["level"]);
+                await devices.Headset.SetSidetoneAsync(level, ct);
+                settings.UpdateHeadset(h => h with { Sidetone = level });
                 return new(true);
+            }
             case "headset.inactive":
-                await devices.Headset.SetInactiveTimeAsync(int.Parse(a["minutes"]), ct);
+            {
+                var minutes = int.Parse(a["minutes"]);
+                await devices.Headset.SetInactiveTimeAsync(minutes, ct);
+                settings.UpdateHeadset(h => h with { InactiveMinutes = minutes });
                 return new(true);
+            }
+            case "settings.get":
+                return new(true, Data: settings.Headset);
             case "audio.get":
                 return new(true, Data: new { volume = await AudioControl.GetVolumeAsync(ct) });
             case "audio.volume":
