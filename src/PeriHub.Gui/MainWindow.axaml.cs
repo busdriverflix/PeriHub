@@ -26,6 +26,7 @@ public partial class MainWindow : Window
     private bool _loading;          // true while we set controls from code, so no command is sent back
     private bool _presetsFilled;
     private bool _settingsLoaded;
+    private bool _mouseLoaded;
     private readonly Dictionary<string, double[]> _presetBands = new();
     private bool _compact;
     private double _expandedWidth = 940;
@@ -45,7 +46,7 @@ public partial class MainWindow : Window
         _tiles.Add(new("mouse", "Aerox 5 Wireless", "IconMouse", MousePane, MouseUpdateButton, MouseUpdateResult));
         foreach (var t in _tiles) BuildTile(t);
         DeviceList.SelectionChanged += (_, _) => ShowSelectedPane();
-        DeviceList.SelectedIndex = 0;
+        DeviceList.SelectedIndex = int.TryParse(Environment.GetEnvironmentVariable("PERIHUB_START_TILE"), out var startTile) && startTile < _tiles.Count ? startTile : 0;
         SidetoneLabel.Text = "?"; // the headset cannot report its current sidetone
 
         foreach (var (label, minutes) in new[] { ("Nie", 0), ("5 Minuten", 5), ("15 Minuten", 15), ("30 Minuten", 30), ("60 Minuten", 60), ("90 Minuten", 90) })
@@ -78,6 +79,11 @@ public partial class MainWindow : Window
             var tile = t;
             tile.UpdateButton.Click += async (_, _) => await RunUpdateCheck(tile.UpdateButton, tile.UpdateResult, tile.Id);
         }
+        foreach (var (label, mode) in new[] { ("Eigene Farben", "static"), ("Regenbogen", "rainbow"), ("Aus", "off") })
+            MouseModeBox.Items.Add(new ComboBoxItem { Content = label, Tag = mode });
+        MouseModeBox.SelectedIndex = 0;
+        MouseModeBox.SelectionChanged += (_, _) => { UpdateMouseColorsEnabled(); Debounced("mouse", SendMouseLights, 400); };
+        foreach (var cp in new[] { TopColor, MiddleColor, BottomColor }) cp.ColorChanged += (_, _) => Debounced("mouse", SendMouseLights, 700);
         CollapseButton.Click += (_, _) => SetCompact(!_compact);
         SurroundToggle.IsCheckedChanged += async (_, _) =>
         {
@@ -121,7 +127,7 @@ public partial class MainWindow : Window
             HorizontalContentAlignment = HorizontalAlignment.Left,
             Content = new StackPanel { Children = { row, t.Pct } },
         });
-        t.Sub.Text = t.Id is "keyboard" or "mouse" ? "Noch keine Steuerung" : "…";
+        t.Sub.Text = t.Id is "keyboard" ? "Noch keine Steuerung" : "…";
     }
 
     private void ShowSelectedPane()
@@ -178,16 +184,28 @@ public partial class MainWindow : Window
         finally { _volBusy = false; }
     }
 
-    private void Debounced(string key, Action action)
+    private void Debounced(string key, Action action, int ms = 350)
     {
         if (_loading) return;
         if (!_debounce.TryGetValue(key, out var t))
         {
-            t = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(350) };
+            t = new DispatcherTimer();
             t.Tick += (_, _) => { t.Stop(); action(); };
             _debounce[key] = t;
         }
+        t.Interval = TimeSpan.FromMilliseconds(ms);
         t.Stop(); t.Start();
+    }
+
+    private void UpdateMouseColorsEnabled() =>
+        MouseColors.IsEnabled = MouseModeBox.SelectedItem is ComboBoxItem { Tag: "static" };
+
+    private static string Hex(Color c) => $"{c.R:x2}{c.G:x2}{c.B:x2}";
+
+    private void SendMouseLights()
+    {
+        if (MouseModeBox.SelectedItem is not ComboBoxItem { Tag: string mode }) return;
+        Send("mouse.lights", ("mode", mode), ("top", Hex(TopColor.Color)), ("middle", Hex(MiddleColor.Color)), ("bottom", Hex(BottomColor.Color)));
     }
 
     private void SendEqualizer() =>
@@ -221,6 +239,24 @@ public partial class MainWindow : Window
             _settingsLoaded = true;
         }
         catch (Exception ex) { ConnectionBanner.Text = $"Einstellungen laden: {ex.Message}"; ConnectionBanner.IsVisible = true; }
+    }
+
+    private async Task LoadSavedMouseAsync()
+    {
+        try
+        {
+            var m = (await _core.CallAsync("mouse.get")).GetProperty("data");
+            if (m.GetProperty("mode").ValueKind == JsonValueKind.String)
+            {
+                var mode = m.GetProperty("mode").GetString();
+                MouseModeBox.SelectedItem = MouseModeBox.Items.OfType<ComboBoxItem>().FirstOrDefault(i => (string?)i.Tag == mode);
+                foreach (var (cp, key) in new[] { (TopColor, "top"), (MiddleColor, "middle"), (BottomColor, "bottom") })
+                    if (m.GetProperty(key).GetString() is { Length: 6 } hex && Color.TryParse("#" + hex, out var col)) cp.Color = col;
+            }
+            UpdateMouseColorsEnabled();
+            _mouseLoaded = true;
+        }
+        catch (Exception ex) { ConnectionBanner.Text = $"Maus-Einstellungen laden: {ex.Message}"; ConnectionBanner.IsVisible = true; }
     }
 
     // ---------- polling ----------
@@ -276,6 +312,9 @@ public partial class MainWindow : Window
                             _presetsFilled = true;
                         }
                         break;
+                    case "mouse":
+                        MouseStatus.Text = text; MouseBattery.Value = battery ?? 0;
+                        break;
                     case "dualsense":
                         PadStatus.Text = text; PadBattery.Value = battery ?? 0;
                         var info = d.GetProperty("info");
@@ -284,6 +323,7 @@ public partial class MainWindow : Window
                 }
             }
             if (!_settingsLoaded && _presetsFilled) await LoadSavedSettingsAsync();
+            if (!_mouseLoaded) await LoadSavedMouseAsync();
             if (surroundRunning is { } sr && SurroundToggle.IsEnabled) SurroundToggle.IsChecked = sr;
             if (volume is { } v && !_volBusy && !VolumeSlider.IsPointerOver)
             {

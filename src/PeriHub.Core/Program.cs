@@ -25,6 +25,7 @@ AppDomain.CurrentDomain.ProcessExit += (_, _) => cts.Cancel();
 
 devices.Updated += notifier.OnUpdate;
 devices.Updated += restorer.OnUpdate;
+devices.Updated += new MouseRestorer(devices.Mouse, settings).OnUpdate;
 
 using var tray = new StatusNotifierTray { OnActivate = StatusNotifierTray.LaunchGui };
 if (!args.Contains("--no-tray"))
@@ -34,13 +35,14 @@ if (!args.Contains("--no-tray"))
     {
         var headset = snap.Devices.FirstOrDefault(d => d.Id == "headset");
         var pad = snap.Devices.FirstOrDefault(d => d.Id == "dualsense");
+        var mouse = snap.Devices.FirstOrDefault(d => d.Id == "mouse");
         var lines = snap.Devices.Select(d => d.Connected
             ? $"{d.Name}: {(d.Battery is { } b ? b + " %" : "?")} ({d.BatteryState})" : $"{d.Name}: {d.BatteryState}");
         // menu lines only when the device is connected and reports a battery level
         static string? MenuLine(DeviceStatus? d, string label) =>
             d is { Connected: true, Battery: { } b } ? $"{label}: {b} %{(d.BatteryState == "Lädt" ? " (lädt)" : "")}" : null;
         tray.Update(headset?.Connected == true ? headset.Battery : null, string.Join("\n", lines),
-            MenuLine(headset, "Headset"), MenuLine(pad, "Controller"));
+            MenuLine(headset, "Headset"), MenuLine(pad, "Controller"), MenuLine(mouse, "Maus"));
     };
 }
 Console.WriteLine($"PeriHub core running, socket: {IpcServer.SocketPath}");

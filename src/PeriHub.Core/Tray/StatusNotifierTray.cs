@@ -59,9 +59,9 @@ public sealed class StatusNotifierTray : IPathMethodHandler, IDisposable
         return w.CreateMessage();
     }
 
-    public void Update(int? percent, string tooltip, string? headsetLine, string? padLine)
+    public void Update(int? percent, string tooltip, string? headsetLine, string? padLine, string? mouseLine)
     {
-        _menu?.SetBatteryLines(headsetLine, padLine);
+        _menu?.SetBatteryLines(headsetLine, padLine, mouseLine);
         _icon = IconRenderer.Render(percent);
         _tooltip = tooltip;
         Signal("NewIcon");

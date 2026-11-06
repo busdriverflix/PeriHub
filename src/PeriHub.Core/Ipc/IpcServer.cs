@@ -95,6 +95,15 @@ public sealed class IpcServer(DeviceManager devices, UpdateChecker updates, Sett
                 settings.UpdateSurround(_ => new(enable, swap)); // saved only after it worked
                 return new(true);
             }
+            case "mouse.get":
+                return new(true, Data: settings.Mouse);
+            case "mouse.lights":
+            {
+                var mode = a["mode"]; a.TryGetValue("top", out var top); a.TryGetValue("middle", out var mid); a.TryGetValue("bottom", out var bot);
+                await devices.Mouse.SetLightsAsync(mode, top, mid, bot, ct);
+                settings.UpdateMouse(_ => new(mode, top, mid, bot));
+                return new(true);
+            }
             case "settings.get":
                 return new(true, Data: settings.Headset);
             case "audio.get":

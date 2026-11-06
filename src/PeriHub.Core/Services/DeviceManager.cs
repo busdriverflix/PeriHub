@@ -5,11 +5,12 @@ namespace PeriHub.Core.Services;
 public sealed class DeviceManager
 {
     public HeadsetDevice Headset { get; } = new();
+    public MouseDevice Mouse { get; } = new();
     private readonly List<IDevice> _devices;
     public Snapshot Current { get; private set; } = new([], DateTimeOffset.MinValue);
     public event Action<Snapshot>? Updated;
 
-    public DeviceManager() => _devices = [Headset, new DualSenseDevice()];
+    public DeviceManager() => _devices = [Headset, new DualSenseDevice(), Mouse];
 
     public async Task RefreshAsync(CancellationToken ct)
     {

@@ -8,26 +8,27 @@ public sealed class DbusMenu(DBusConnection conn, Action onOpen) : IPathMethodHa
     private const string Iface = "com.canonical.dbusmenu";
     private sealed record Item(int Id, string Label, bool Enabled, bool Separator);
 
-    private List<Item> _items = Build(null, null);
+    private List<Item> _items = Build(null, null, null);
     private uint _revision = 1;
 
     public string Path => "/MenuBar";
     public bool HandlesChildPaths => false;
 
-    private static List<Item> Build(string? headset, string? pad)
+    private static List<Item> Build(string? headset, string? pad, string? mouse)
     {
         var items = new List<Item> { new(1, "PeriHub öffnen", true, false) };
-        if (headset is null && pad is null) return items;
+        if (headset is null && pad is null && mouse is null) return items;
         items.Add(new(2, "", false, true));
         if (headset is not null) items.Add(new(3, headset, false, false)); // disabled = shown as info text, not clickable
         if (pad is not null) items.Add(new(4, pad, false, false));
+        if (mouse is not null) items.Add(new(5, mouse, false, false));
         return items;
     }
 
     /// <summary>Pass null for a device that is off or has no battery value: its line is then left out.</summary>
-    public void SetBatteryLines(string? headset, string? pad)
+    public void SetBatteryLines(string? headset, string? pad, string? mouse)
     {
-        var next = Build(headset, pad);
+        var next = Build(headset, pad, mouse);
         if (next.SequenceEqual(_items)) return;
         _items = next;
         _revision++;
