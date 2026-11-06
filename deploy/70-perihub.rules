@@ -1,0 +1,8 @@
+# PeriHub: let the logged-in desktop user (and only them) talk to the peripherals it controls.
+# "uaccess" grants an ACL to the active session's user; unlike MODE="0666" it does not open the device to every account.
+
+# SteelSeries Aerox 5 Wireless: 2.4 GHz dongle (1852) and wired mode (1854)
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="1038", ATTRS{idProduct}=="1852", TAG+="uaccess"
+SUBSYSTEM=="hidraw", ATTRS{idVendor}=="1038", ATTRS{idProduct}=="1854", TAG+="uaccess"
+SUBSYSTEM=="usb",    ATTRS{idVendor}=="1038", ATTRS{idProduct}=="1852", TAG+="uaccess"
+SUBSYSTEM=="usb",    ATTRS{idVendor}=="1038", ATTRS{idProduct}=="1854", TAG+="uaccess"

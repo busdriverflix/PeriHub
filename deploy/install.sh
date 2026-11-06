@@ -8,7 +8,8 @@ dest="$HOME/.local/share/perihub"
 dotnet publish "$root/src/PeriHub.Core" -c Release -o "$dest" --nologo -v q
 dotnet publish "$root/src/PeriHub.Gui"  -c Release -o "$dest" --nologo -v q
 
-mkdir -p "$HOME/.config/autostart"
+mkdir -p "$dest/deploy" "$HOME/.config/autostart"
+cp "$root"/deploy/70-perihub.rules "$root"/deploy/install-udev.sh "$dest/deploy/"
 cat > "$HOME/.config/autostart/perihub-core.desktop" <<DESKTOP
 [Desktop Entry]
 Type=Application
