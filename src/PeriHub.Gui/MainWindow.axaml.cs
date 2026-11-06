@@ -27,6 +27,7 @@ public partial class MainWindow : Window
     private bool _presetsFilled;
     private bool _settingsLoaded;
     private bool _mouseLoaded;
+    private DateTime _mouseIgnoreUntil = DateTime.MaxValue; // controls report 'changed' on their own while they are set up; those are not user input
     private readonly Dictionary<string, double[]> _presetBands = new();
     private bool _compact;
     private double _expandedWidth = 940;
@@ -212,6 +213,7 @@ public partial class MainWindow : Window
 
     private void SendMouseLights()
     {
+        if (!_mouseLoaded || DateTime.UtcNow < _mouseIgnoreUntil) return; // never push lighting just because the window opened
         if (MouseModeBox.SelectedItem is not ComboBoxItem { Tag: string mode }) return;
         Send("mouse.lights", ("mode", mode), ("top", Hex(TopColor.Color)), ("middle", Hex(MiddleColor.Color)), ("bottom", Hex(BottomColor.Color)));
     }
@@ -262,6 +264,8 @@ public partial class MainWindow : Window
                     if (m.GetProperty(key).GetString() is { Length: 6 } hex && Color.TryParse("#" + hex, out var col)) cp.Color = col;
             }
             UpdateMouseColorsEnabled();
+            _mouseIgnoreUntil = DateTime.UtcNow.AddSeconds(2); // late change events from the color pickers land in this window
+            if (_debounce.TryGetValue("mouse", out var pending)) pending.Stop();
             _mouseLoaded = true;
         }
         catch (Exception ex) { ConnectionBanner.Text = $"Maus-Einstellungen laden: {ex.Message}"; ConnectionBanner.IsVisible = true; }
