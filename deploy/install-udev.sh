@@ -5,6 +5,7 @@ set -euo pipefail
 here="$(cd "$(dirname "$0")" && pwd)"
 install -m 644 "$here/70-perihub.rules" /etc/udev/rules.d/70-perihub.rules
 udevadm control --reload-rules
-udevadm trigger --subsystem-match=hidraw --subsystem-match=usb --attr-match=idVendor=1038
-udevadm trigger --subsystem-match=hidraw --subsystem-match=usb --attr-match=idVendor=1e7d
+# hidraw nodes do not carry idVendor themselves (their parent does), so an attribute filter would skip them: re-trigger all hidraw + usb devices
+udevadm trigger --subsystem-match=hidraw --action=change
+udevadm trigger --subsystem-match=usb --action=change
 echo "Done. If the mouse is still not accessible, unplug and replug its dongle."
