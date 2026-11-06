@@ -1,3 +1,4 @@
+using PeriHub.Core;
 using System.Text.Json;
 using PeriHub.Core.Ipc;
 using PeriHub.Core.Services;
@@ -27,9 +28,14 @@ if (!args.Contains("--no-tray"))
     devices.Updated += snap =>
     {
         var headset = snap.Devices.FirstOrDefault(d => d.Id == "headset");
+        var pad = snap.Devices.FirstOrDefault(d => d.Id == "dualsense");
         var lines = snap.Devices.Select(d => d.Connected
             ? $"{d.Name}: {(d.Battery is { } b ? b + " %" : "?")} ({d.BatteryState})" : $"{d.Name}: {d.BatteryState}");
-        tray.Update(headset?.Connected == true ? headset.Battery : null, string.Join("\n", lines));
+        // menu lines only when the device is connected and reports a battery level
+        static string? MenuLine(DeviceStatus? d, string label) =>
+            d is { Connected: true, Battery: { } b } ? $"{label}: {b} %{(d.BatteryState == "Lädt" ? " (lädt)" : "")}" : null;
+        tray.Update(headset?.Connected == true ? headset.Battery : null, string.Join("\n", lines),
+            MenuLine(headset, "Headset"), MenuLine(pad, "Controller"));
     };
 }
 Console.WriteLine($"PeriHub core running, socket: {IpcServer.SocketPath}");

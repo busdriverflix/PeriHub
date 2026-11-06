@@ -10,6 +10,7 @@ public sealed class StatusNotifierTray : IPathMethodHandler, IDisposable
     private const string Iface = "org.kde.StatusNotifierItem";
     private readonly string _service = $"org.kde.StatusNotifierItem-{Environment.ProcessId}-1";
     private DBusConnection? _conn;
+    private DbusMenu? _menu;
     private byte[] _icon = IconRenderer.Render(null);
     private string _tooltip = "PeriHub";
 
@@ -22,6 +23,8 @@ public sealed class StatusNotifierTray : IPathMethodHandler, IDisposable
         _conn = new DBusConnection(DBusAddress.Session!);
         await _conn.ConnectAsync();
         _conn.AddMethodHandler(this);
+        _menu = new DbusMenu(_conn, () => OnActivate?.Invoke());
+        _conn.AddMethodHandler(_menu);
         _ = _conn.DisconnectedAsync().ContinueWith(t => Console.Error.WriteLine($"D-Bus disconnected: {t.Result}"));
         var got = await _conn.TryRequestNameAsync(_service, RequestNameOptions.Default);
         Console.WriteLine($"Bus name {_service}: {(got ? "acquired" : "NOT acquired")} (unique {_conn.UniqueName})");
@@ -56,8 +59,9 @@ public sealed class StatusNotifierTray : IPathMethodHandler, IDisposable
         return w.CreateMessage();
     }
 
-    public void Update(int? percent, string tooltip)
+    public void Update(int? percent, string tooltip, string? headsetLine, string? padLine)
     {
+        _menu?.SetBatteryLines(headsetLine, padLine);
         _icon = IconRenderer.Render(percent);
         _tooltip = tooltip;
         Signal("NewIcon");
@@ -130,7 +134,7 @@ public sealed class StatusNotifierTray : IPathMethodHandler, IDisposable
             case "WindowId": w.WriteVariantUInt32(0); break;
             case "IconName" or "OverlayIconName" or "AttentionIconName": w.WriteVariantString(""); break;
             case "ItemIsMenu": w.WriteVariantBool(false); break;
-            case "Menu": w.WriteVariantObjectPath("/NO_DBUSMENU"); break;
+            case "Menu": w.WriteVariantObjectPath("/MenuBar"); break;
             case "IconPixmap":
             {
                 w.WriteSignature("a(iiay)");
