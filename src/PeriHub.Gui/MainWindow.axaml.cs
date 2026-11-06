@@ -84,6 +84,14 @@ public partial class MainWindow : Window
         MouseModeBox.SelectedIndex = 0;
         MouseModeBox.SelectionChanged += (_, _) => { UpdateMouseColorsEnabled(); Debounced("mouse", SendMouseLights, 400); };
         foreach (var cp in new[] { TopColor, MiddleColor, BottomColor }) cp.ColorChanged += (_, _) => Debounced("mouse", SendMouseLights, 700);
+        ResetEqButton.Click += (_, _) =>
+        {
+            _loading = true; // set the controls without sending one command per slider
+            foreach (var b in _bands) b.Value = 0;
+            PresetBox.SelectedItem = _presetBands.FirstOrDefault(p => p.Value.All(v => v == 0)).Key; // "flat" if the headset has it
+            _loading = false;
+            SendEqualizer(); // saved by the core like any other EQ change
+        };
         CollapseButton.Click += (_, _) => SetCompact(!_compact);
         SurroundToggle.IsCheckedChanged += async (_, _) =>
         {

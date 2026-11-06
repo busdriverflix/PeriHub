@@ -46,7 +46,10 @@
               </DockPanel>
 
               <TextBlock Text="Equalizer" FontWeight="SemiBold" Margin="0,10,0,0"/>
-              <ComboBox x:Name="PresetBox" Width="260" HorizontalAlignment="Left" PlaceholderText="Preset wählen …"/>
+              <StackPanel Orientation="Horizontal" Spacing="10">
+                <ComboBox x:Name="PresetBox" Width="260" PlaceholderText="Preset wählen …"/>
+                <Button x:Name="ResetEqButton" Content="Zurücksetzen" ToolTip.Tip="Alle Bänder auf 0 dB"/>
+              </StackPanel>
               <Grid ColumnDefinitions="*,*,*,*,*" Height="170" MaxWidth="460" HorizontalAlignment="Left" Width="460">
                 <StackPanel Grid.Column="0" HorizontalAlignment="Center"><Slider x:Name="Band0" Orientation="Vertical" Minimum="-10" Maximum="10" Height="130"/><TextBlock Text="Tief" HorizontalAlignment="Center" FontSize="11"/></StackPanel>
                 <StackPanel Grid.Column="1" HorizontalAlignment="Center"><Slider x:Name="Band1" Orientation="Vertical" Minimum="-10" Maximum="10" Height="130"/><TextBlock Text="Bass" HorizontalAlignment="Center" FontSize="11"/></StackPanel>
