@@ -8,7 +8,9 @@ var devices = new DeviceManager();
 var notifier = new BatteryNotifier();
 var updates = new UpdateChecker();
 var settings = new SettingsStore();
-var restorer = new HeadsetRestorer(devices.Headset, settings);
+PeriHub.Core.Surround.SurroundService.KillLeftover();
+using var surround = new PeriHub.Core.Surround.SurroundService();
+var restorer = new HeadsetRestorer(devices.Headset, settings, surround);
 
 if (args.Contains("--once")) // debugging: print one status snapshot and exit
 {
@@ -43,9 +45,14 @@ if (!args.Contains("--no-tray"))
 }
 Console.WriteLine($"PeriHub core running, socket: {IpcServer.SocketPath}");
 _ = StartupUpdateCheckAsync(updates, cts.Token);
-await Task.WhenAll(
-    devices.RunAsync(TimeSpan.FromSeconds(30), cts.Token),
-    new IpcServer(devices, updates, settings).RunAsync(cts.Token));
+try
+{
+    await Task.WhenAll(
+        devices.RunAsync(TimeSpan.FromSeconds(30), cts.Token),
+        new IpcServer(devices, updates, settings, surround).RunAsync(cts.Token));
+}
+catch (OperationCanceledException) { }
+await surround.StopAsync(CancellationToken.None); // give the audio output back before exiting
 
 /// <summary>Shortly after start, ask fwupd about our peripherals and notify only if something is actually available.</summary>
 static async Task StartupUpdateCheckAsync(UpdateChecker updates, CancellationToken ct)

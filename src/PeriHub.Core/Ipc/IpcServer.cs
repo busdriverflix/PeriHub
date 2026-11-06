@@ -5,7 +5,7 @@ using PeriHub.Core.Services;
 namespace PeriHub.Core.Ipc;
 
 /// <summary>JSON-lines protocol over a Unix socket in $XDG_RUNTIME_DIR. One request line -> one response line.</summary>
-public sealed class IpcServer(DeviceManager devices, UpdateChecker updates, SettingsStore settings)
+public sealed class IpcServer(DeviceManager devices, UpdateChecker updates, SettingsStore settings, PeriHub.Core.Surround.SurroundService surround)
 {
     public static string SocketPath => Path.Combine(
         Environment.GetEnvironmentVariable("XDG_RUNTIME_DIR") ?? Path.GetTempPath(), "perihub.sock");
@@ -83,6 +83,16 @@ public sealed class IpcServer(DeviceManager devices, UpdateChecker updates, Sett
                 var minutes = int.Parse(a["minutes"]);
                 await devices.Headset.SetInactiveTimeAsync(minutes, ct);
                 settings.UpdateHeadset(h => h with { InactiveMinutes = minutes });
+                return new(true);
+            }
+            case "surround.get":
+                return new(true, Data: new { enabled = settings.Surround.Enabled, running = surround.Running, swapSides = settings.Surround.SwapSides });
+            case "surround.set":
+            {
+                var enable = bool.Parse(a["enabled"]);
+                var swap = a.TryGetValue("swapSides", out var sw) ? bool.Parse(sw) : settings.Surround.SwapSides;
+                if (enable) await surround.StartAsync(swap, ct); else await surround.StopAsync(ct);
+                settings.UpdateSurround(_ => new(enable, swap)); // saved only after it worked
                 return new(true);
             }
             case "settings.get":

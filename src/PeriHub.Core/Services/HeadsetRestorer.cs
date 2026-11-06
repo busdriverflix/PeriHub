@@ -1,9 +1,10 @@
 using PeriHub.Core.Devices;
+using PeriHub.Core.Surround;
 
 namespace PeriHub.Core.Services;
 
 /// <summary>Re-applies the saved EQ / sidetone / auto-off whenever the headset (re)connects.</summary>
-public sealed class HeadsetRestorer(HeadsetDevice headset, SettingsStore store)
+public sealed class HeadsetRestorer(HeadsetDevice headset, SettingsStore store, SurroundService surround)
 {
     private bool _wasConnected;
 
@@ -23,6 +24,8 @@ public sealed class HeadsetRestorer(HeadsetDevice headset, SettingsStore store)
             if (s.Eq is { Length: > 0 }) await headset.SetEqualizerAsync(s.Eq, default);
             if (s.Sidetone is { } st) await headset.SetSidetoneAsync(st, default);
             if (s.InactiveMinutes is { } m) await headset.SetInactiveTimeAsync(m, default);
+            if (store.Surround is { Enabled: true } sur && !surround.Running)
+                await surround.StartAsync(sur.SwapSides, default);
             Console.WriteLine("Restored saved headset settings");
         }
         catch (Exception ex) { Console.Error.WriteLine($"Restoring headset settings failed: {ex.Message}"); }

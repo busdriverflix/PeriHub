@@ -79,6 +79,19 @@ public partial class MainWindow : Window
             tile.UpdateButton.Click += async (_, _) => await RunUpdateCheck(tile.UpdateButton, tile.UpdateResult, tile.Id);
         }
         CollapseButton.Click += (_, _) => SetCompact(!_compact);
+        SurroundToggle.IsCheckedChanged += async (_, _) =>
+        {
+            if (_loading) return;
+            var want = SurroundToggle.IsChecked == true;
+            SurroundToggle.IsEnabled = false;
+            try { await _core.CallAsync("surround.set", new() { ["enabled"] = want.ToString().ToLowerInvariant() }); }
+            catch (Exception ex)
+            {
+                ConnectionBanner.Text = $"Surround: {ex.Message}"; ConnectionBanner.IsVisible = true;
+                _loading = true; SurroundToggle.IsChecked = !want; _loading = false; // show what is really the case
+            }
+            SurroundToggle.IsEnabled = true;
+        };
 
         _poll.Tick += async (_, _) => await RefreshAsync();
         _poll.Start();
@@ -216,11 +229,13 @@ public partial class MainWindow : Window
     {
         JsonElement status;
         int? volume = null;
+        bool? surroundRunning = null;
         try
         {
             status = (await _core.CallAsync("status")).GetProperty("data");
             var vol = (await _core.CallAsync("audio.get")).GetProperty("data").GetProperty("volume");
             if (vol.ValueKind == JsonValueKind.Number) volume = vol.GetInt32();
+            surroundRunning = (await _core.CallAsync("surround.get")).GetProperty("data").GetProperty("running").GetBoolean();
         }
         catch (Exception ex) when (ex is IOException or System.Net.Sockets.SocketException)
         {
@@ -269,6 +284,7 @@ public partial class MainWindow : Window
                 }
             }
             if (!_settingsLoaded && _presetsFilled) await LoadSavedSettingsAsync();
+            if (surroundRunning is { } sr && SurroundToggle.IsEnabled) SurroundToggle.IsChecked = sr;
             if (volume is { } v && !_volBusy && !VolumeSlider.IsPointerOver)
             {
                 VolumeSlider.Value = v; VolumeLabel.Text = $"{v} %";
