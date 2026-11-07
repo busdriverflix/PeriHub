@@ -90,7 +90,8 @@
             <ProgressBar x:Name="PadBattery" Minimum="0" Maximum="100" Height="8"/>
             <TextBlock x:Name="PadInfo" Opacity="0.8"/>
             <TextBlock FontSize="11" Opacity="0.6" TextWrapping="Wrap"
-                       Text="Firmware-Updates gibt es nur über Sonys Windows-Tool; PeriHub zeigt hier nur die installierte Version."/>
+                       Text="PeriHub vergleicht die Firmware-Nummer mit Sonys Server. Installieren lässt sich ein Update nur mit Sonys PlayStation-Accessories-App (Windows) oder an der PS5. Was sich ändert, steht auf Sonys Support-Seite."/>
+            <Button x:Name="PadSonyLink" Content="Sony-Support öffnen (Neuerungen, Anleitung)" HorizontalAlignment="Left"/>
           </StackPanel>
           <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="12" Margin="20,8,20,16">
             <TextBlock x:Name="PadUpdateResult" VerticalAlignment="Center" FontSize="12" Opacity="0.8" MaxWidth="360" TextWrapping="Wrap"/>

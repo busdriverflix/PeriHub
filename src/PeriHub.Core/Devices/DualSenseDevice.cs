@@ -4,6 +4,7 @@ namespace PeriHub.Core.Devices;
 public sealed class DualSenseDevice : IDevice
 {
     public string Id => "dualsense";
+    private readonly Dictionary<string, DualSenseFirmwareInfo.Info?> _fwCache = new(); // read once per connection, not every poll
 
     public Task<DeviceStatus> QueryAsync(CancellationToken ct)
     {
@@ -18,6 +19,9 @@ public sealed class DualSenseDevice : IDevice
         info["connection"] = bus == "0003" ? "USB" : bus == "0005" ? "Bluetooth" : bus;
         info["firmware"] = Read(Path.Combine(hid, "firmware_version")) ?? "?";
         info["hardware"] = Read(Path.Combine(hid, "hardware_version")) ?? "?";
+        var key = Path.GetFileName(hid);
+        if (!_fwCache.TryGetValue(key, out var fw)) _fwCache[key] = fw = DualSenseFirmwareInfo.Read(hid);
+        if (fw is not null) { info["updateVersion"] = $"0x{fw.UpdateVersion:x4}"; info["build"] = fw.Build; }
 
         int? level = null;
         var state = "Verbunden";

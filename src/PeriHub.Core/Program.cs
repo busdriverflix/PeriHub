@@ -6,7 +6,7 @@ using PeriHub.Core.Tray;
 
 var devices = new DeviceManager();
 var notifier = new BatteryNotifier();
-var updates = new UpdateChecker();
+var updates = new UpdateChecker(devices, new ControllerFirmwareChecker());
 var settings = new SettingsStore();
 PeriHub.Core.Surround.SurroundService.KillLeftover();
 using var surround = new PeriHub.Core.Surround.SurroundService();
@@ -67,8 +67,12 @@ static async Task StartupUpdateCheckAsync(UpdateChecker updates, CancellationTok
         {
             var json = JsonSerializer.SerializeToElement(await updates.CheckAsync(id, ct));
             if (json.TryGetProperty("updates", out var n) && n.GetInt32() > 0)
-                await ProcessRunner.RunAsync("notify-send", ["-a", "PeriHub", "-i", "software-update-available",
-                    "Firmware-Update verfügbar", $"Für ein Gerät ({id}) gibt es ein Update. Details in PeriHub."], ct: ct);
+            {
+                var body = id == "dualsense"
+                    ? "Für den DualSense gibt es neue Firmware. Update nur über Sonys PlayStation-Accessories-App (Windows) oder die PS5. Details in PeriHub."
+                    : $"Für ein Gerät ({id}) gibt es ein Update. Details in PeriHub.";
+                await ProcessRunner.RunAsync("notify-send", ["-a", "PeriHub", "-i", "software-update-available", "Firmware-Update verfügbar", body], ct: ct);
+            }
         }
     }
     catch (OperationCanceledException) { }

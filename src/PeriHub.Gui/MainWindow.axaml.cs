@@ -100,6 +100,7 @@ public partial class MainWindow : Window
             _loading = false;
             SendEqualizer(); // saved by the core like any other EQ change
         };
+        PadSonyLink.Click += (_, _) => OpenUrl("https://www.playstation.com/en-us/support/hardware/accessories/");
         CollapseButton.Click += (_, _) => SetCompact(!_compact);
         SurroundToggle.IsCheckedChanged += async (_, _) =>
         {
@@ -174,13 +175,36 @@ public partial class MainWindow : Window
         try
         {
             var data = (await _core.CallAsync("updates.check", device is null ? null : new() { ["device"] = device })).GetProperty("data");
-            if (data.TryGetProperty("error", out var e) && e.ValueKind == JsonValueKind.String) result.Text = $"Fehler: {e.GetString()}";
+            if (device == "dualsense" && data.TryGetProperty("controller", out var fw)) result.Text = DescribeControllerFirmware(fw);
+            else if (device == "dualsense") result.Text = "Controller nicht verbunden, Firmware nicht prüfbar.";
+            else if (data.TryGetProperty("error", out var e) && e.ValueKind == JsonValueKind.String) result.Text = $"Fehler: {e.GetString()}";
             else if (device is not null && data.TryGetProperty("supported", out var s) && !s.GetBoolean()) result.Text = "fwupd kennt dieses Gerät nicht, automatische Prüfung nicht möglich.";
             else if (data.GetProperty("updates").GetInt32() is var n && n == 0) result.Text = "Kein Update gefunden.";
             else result.Text = $"{n} Update(s): {string.Join(", ", data.GetProperty("devices").EnumerateArray().Select(x => x.GetString()))}";
         }
         catch (Exception ex) { result.Text = $"Fehler: {ex.Message}"; }
         button.IsEnabled = true;
+    }
+
+    /// <summary>Plain-language summary of the Sony version comparison.</summary>
+    private static string DescribeControllerFirmware(JsonElement fw)
+    {
+        var installed = fw.GetProperty("installed").GetString();
+        var latest = fw.TryGetProperty("latest", out var l) && l.ValueKind == JsonValueKind.String ? l.GetString() : null;
+        return fw.GetProperty("status").GetString() switch
+        {
+            "current" => $"Aktuell: Firmware {installed} ist laut Sony die neueste.",
+            "newer" => $"Neue Firmware verfügbar: {latest} (installiert: {installed}). Installieren geht nur mit Sonys PlayStation-Accessories-App (Windows) oder an der PS5.",
+            "ahead" => $"Installiert: {installed}, Sonys Liste kennt nur {latest}. Die Version ist neuer als die Liste.",
+            _ => fw.TryGetProperty("error", out var e) && e.ValueKind == JsonValueKind.String ? $"Nicht prüfbar: {e.GetString()}" : "Nicht prüfbar.",
+        };
+    }
+
+    private static void OpenUrl(string url)
+    {
+        var psi = new System.Diagnostics.ProcessStartInfo("xdg-open") { UseShellExecute = false };
+        psi.ArgumentList.Add(url);
+        try { System.Diagnostics.Process.Start(psi); } catch { /* no browser available: nothing sensible to do */ }
     }
 
     private async void PushVolume(int percent)
@@ -369,7 +393,9 @@ public partial class MainWindow : Window
                     case "dualsense":
                         PadStatus.Text = text; PadBattery.Value = battery ?? 0;
                         var info = d.GetProperty("info");
-                        PadInfo.Text = connected ? $"Verbindung: {info.GetProperty("connection").GetString()}   ·   Firmware: {info.GetProperty("firmware").GetString()}" : "";
+                        PadInfo.Text = !connected ? "" : info.TryGetProperty("updateVersion", out var uv)
+                            ? $"Verbindung: {info.GetProperty("connection").GetString()}   ·   Firmware: {uv.GetString()} (Build {info.GetProperty("build").GetString()})"
+                            : $"Verbindung: {info.GetProperty("connection").GetString()}   ·   Firmware: {info.GetProperty("firmware").GetString()}";
                         break;
                 }
             }

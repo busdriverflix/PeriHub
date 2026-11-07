@@ -3,7 +3,7 @@ using System.Text.Json;
 namespace PeriHub.Core.Services;
 
 /// <summary>Checks for firmware updates via fwupd (LVFS). Never flashes anything by itself.</summary>
-public sealed class UpdateChecker
+public sealed class UpdateChecker(DeviceManager devices, ControllerFirmwareChecker controllerChecker)
 {
     /// <summary>Keywords that identify each of our devices in fwupd's name/vendor strings.</summary>
     private static readonly Dictionary<string, string[]> Keywords = new()
@@ -14,11 +14,11 @@ public sealed class UpdateChecker
         ["mouse"] = ["aerox", "steelseries"],
     };
 
-    public async Task<object> CheckAsync(string? device, CancellationToken ct)
+    public async Task<Dictionary<string, object?>> CheckAsync(string? device, CancellationToken ct)
     {
         string[]? words = null;
         if (device is not null && !Keywords.TryGetValue(device, out words))
-            return new { source = "fwupd", error = $"Unbekanntes Gerät '{device}'" };
+            return new() { ["source"] = "fwupd", ["error"] = $"Unbekanntes Gerät '{device}'" };
         try
         {
             await ProcessRunner.RunAsync("fwupdmgr", ["refresh", "--assume-yes"], TimeSpan.FromSeconds(60), ct); // exit code 2 = already up to date
@@ -29,17 +29,30 @@ public sealed class UpdateChecker
                 words is null || words.Any(w => d.Name.Contains(w, StringComparison.OrdinalIgnoreCase) || d.Vendor.Contains(w, StringComparison.OrdinalIgnoreCase));
 
             var hits = updates.Where(Match).Select(d => d.Name).ToList();
-            return new
+            var result = new Dictionary<string, object?>
             {
-                source = "fwupd",
-                supported = words is null || known.Any(Match), // does fwupd know the device at all?
-                updates = hits.Count,
-                devices = hits,
+                ["source"] = "fwupd",
+                ["supported"] = words is null || known.Any(Match), // does fwupd know the device at all?
             };
+
+            // the DualSense is not in fwupd; Sony's own version list is the source for it
+            if (device is null or "dualsense")
+            {
+                var installed = devices.Current.Devices.FirstOrDefault(d => d.Id == "dualsense" && d.Connected)?.Info.GetValueOrDefault("updateVersion");
+                if (installed is not null)
+                {
+                    var fw = await controllerChecker.CheckAsync(installed, ct);
+                    result["controller"] = fw;
+                    if (fw.Status == "newer") hits.Add($"DualSense-Firmware {fw.Latest} (installiert {fw.Installed})");
+                }
+            }
+            result["updates"] = hits.Count;
+            result["devices"] = hits;
+            return result;
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
-            return new { source = "fwupd", updates = 0, error = ex.Message };
+            return new() { ["source"] = "fwupd", ["updates"] = 0, ["error"] = ex.Message };
         }
     }
 
